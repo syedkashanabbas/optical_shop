@@ -482,38 +482,48 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
      }
  
 
-    public function get_client_debt_total($id){
-
+    public function get_client_debt_total($id)
+    {
         $user_auth = auth()->user();
-		if ($user_auth->can('pay_sale_due')){
+
+        if ($user_auth->can('pay_sale_due')) {
 
             $client = Client::findOrFail($id);
-            $sell_due = 0;
 
-            $item['total_amount'] = DB::table('sales')
-                ->where('deleted_at', '=', null)
+            $total_amount = DB::table('sales')
+                ->whereNull('deleted_at')
                 ->where('client_id', $id)
                 ->sum('GrandTotal');
 
-            $item['total_paid'] = DB::table('sales')
-                ->where('sales.deleted_at', '=', null)
-                ->where('sales.client_id', $id)
+            $total_paid = DB::table('sales')
+                ->whereNull('deleted_at')
+                ->where('client_id', $id)
                 ->sum('paid_amount');
 
-            $sell_due =  $item['total_amount'] - $item['total_paid'];
+            $sell_due = $total_amount - $total_paid;
 
-            $payment_methods = PaymentMethod::where('deleted_at', '=', null)->orderBy('id', 'desc')->get(['id','title']);
-            $accounts = Account::where('deleted_at', '=', null)->orderBy('id', 'desc')->get(['id','account_name']);
+            // 👇 opening balance backend me hi add
+            $opening_balance = $client->opening_balance ?? 0;
+            $sell_due = $sell_due + $opening_balance;
+
+            $payment_methods = PaymentMethod::whereNull('deleted_at')
+                ->orderBy('id', 'desc')
+                ->get(['id', 'title']);
+
+            $accounts = Account::whereNull('deleted_at')
+                ->orderBy('id', 'desc')
+                ->get(['id', 'account_name']);
 
             return response()->json([
                 'sell_due' => $sell_due,
                 'payment_methods' => $payment_methods,
                 'accounts' => $accounts,
             ]);
-
         }
-        return abort('403', __('You are not authorized'));
+
+        return abort(403, __('You are not authorized'));
     }
+
 
      //------------- clients_pay_due -------------\\
 
@@ -594,91 +604,134 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
 //         return abort('403', __('You are not authorized'));
  
 //      }
-          public function clients_pay_due(Request $request)
+    public function clients_pay_due(Request $request)
 {
     $user_auth = auth()->user();
-    if ($user_auth->can('pay_sale_due')) {
 
-        request()->validate([
-            'client_id'         => 'required',
-            'payment_method_id' => 'required',
-        ]);
+    if (!$user_auth->can('pay_sale_due')) {
+        return abort(403, __('You are not authorized'));
+    }
 
-        if ($request['montant'] > 0) {
+    request()->validate([
+        'client_id'         => 'required',
+        'payment_method_id' => 'required',
+    ]);
 
-            $client_sales_due = Sale::whereNull('deleted_at')
-                ->where('payment_statut', '!=', 'paid')
-                ->where('client_id', $request->client_id)
-                ->get();
-
-            $paid_amount_total = $request->montant;
-
-            foreach ($client_sales_due as $client_sale) {
-
-                if ($paid_amount_total == 0) break;
-
-                $due = $client_sale->GrandTotal - $client_sale->paid_amount;
-
-                $amount = $paid_amount_total >= $due ? $due : $paid_amount_total;
-                $payment_status = $paid_amount_total >= $due ? 'paid' : 'partial';
-
-                // Save PaymentSale
-                $payment_sale = new PaymentSale();
-                $payment_sale->date = $request['date'];
-                $payment_sale->account_id = $request['account_id'] ?? NULL;
-                $payment_sale->sale_id = $client_sale->id;
-                $payment_sale->Ref = $this->generate_random_code_payment();
-                $payment_sale->payment_method_id = $request['payment_method_id'];
-                $payment_sale->montant = $amount;
-                $payment_sale->change = 0;
-                $payment_sale->notes = $request['notes'];
-                $payment_sale->user_id = Auth::id();
-                $payment_sale->save();
-
-                // Client Ledger Log
-                \App\Services\ClientLedgerService::log(
-                    $request->client_id,
-                    'sale_payment',
-                    $payment_sale->Ref,
-                    0,
-                    $amount
-                );
-
-                // ✅ Account Ledger Log (NEW)
-                if ($request['account_id']) {
-                    AccountLedgerService::log(
-                        $request['account_id'],
-                        'client_payment',
-                        $payment_sale->Ref,
-                        $amount, // Money is going out
-                        0
-                    );
-                }
-
-                // Update Account balance
-                if ($request['account_id']) {
-                    $account = Account::find($request['account_id']);
-                    if ($account) {
-                        $account->update([
-                            'initial_balance' => $account->initial_balance + $amount,
-                        ]);
-                    }
-                }
-
-                // Update Sale
-                $client_sale->paid_amount += $amount;
-                $client_sale->payment_statut = $payment_status;
-                $client_sale->save();
-
-                $paid_amount_total -= $amount;
-            }
-        }
-
+    if ($request->montant <= 0) {
         return response()->json(['success' => true]);
     }
 
-    return abort('403', __('You are not authorized'));
+    $paid_amount_total = $request->montant;
+    $client = Client::findOrFail($request->client_id);
+
+    // ===============================
+    // 1️⃣ SETTLE OPENING BALANCE FIRST
+    // ===============================
+    if ($client->opening_balance > 0 && $paid_amount_total > 0) {
+
+        $opening_due  = $client->opening_balance;
+        $opening_paid = min($paid_amount_total, $opening_due);
+
+        // Client Ledger Log for opening balance
+        \App\Services\ClientLedgerService::log(
+            $client->id,
+            'opening_balance_payment',
+            $this->generate_random_code_payment(),
+            0,
+            $opening_paid
+        );
+
+        // Account Ledger Log
+        if ($request->account_id) {
+            AccountLedgerService::log(
+                $request->account_id,
+                'client_opening_payment',
+                null,
+                $opening_paid,
+                0
+            );
+
+            $account = Account::find($request->account_id);
+            if ($account) {
+                $account->update([
+                    'initial_balance' => $account->initial_balance + $opening_paid,
+                ]);
+            }
+        }
+
+        $client->opening_balance -= $opening_paid;
+        $client->save();
+
+        $paid_amount_total -= $opening_paid;
+    }
+
+    // ===============================
+    // 2️⃣ APPLY REMAINING TO SALES
+    // ===============================
+    if ($paid_amount_total > 0) {
+
+        $client_sales_due = Sale::whereNull('deleted_at')
+            ->where('payment_statut', '!=', 'paid')
+            ->where('client_id', $client->id)
+            ->get();
+
+        foreach ($client_sales_due as $client_sale) {
+
+            if ($paid_amount_total <= 0) break;
+
+            $due = $client_sale->GrandTotal - $client_sale->paid_amount;
+
+            $amount = min($paid_amount_total, $due);
+            $payment_status = $amount == $due ? 'paid' : 'partial';
+
+            $payment_sale = new PaymentSale();
+            $payment_sale->date = $request->date;
+            $payment_sale->account_id = $request->account_id ?? null;
+            $payment_sale->sale_id = $client_sale->id;
+            $payment_sale->Ref = $this->generate_random_code_payment();
+            $payment_sale->payment_method_id = $request->payment_method_id;
+            $payment_sale->montant = $amount;
+            $payment_sale->change = 0;
+            $payment_sale->notes = $request->notes;
+            $payment_sale->user_id = Auth::id();
+            $payment_sale->save();
+
+            \App\Services\ClientLedgerService::log(
+                $client->id,
+                'sale_payment',
+                $payment_sale->Ref,
+                0,
+                $amount
+            );
+
+            if ($request->account_id) {
+                AccountLedgerService::log(
+                    $request->account_id,
+                    'client_payment',
+                    $payment_sale->Ref,
+                    $amount,
+                    0
+                );
+
+                $account = Account::find($request->account_id);
+                if ($account) {
+                    $account->update([
+                        'initial_balance' => $account->initial_balance + $amount,
+                    ]);
+                }
+            }
+
+            $client_sale->paid_amount += $amount;
+            $client_sale->payment_statut = $payment_status;
+            $client_sale->save();
+
+            $paid_amount_total -= $amount;
+        }
+    }
+
+    return response()->json(['success' => true]);
 }
+
      public function get_client_debt_return_total($id){
 
         $user_auth = auth()->user();

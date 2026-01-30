@@ -410,7 +410,7 @@
                 if(app.sell_due > 0){
                     $('#add_payment_sale').modal('show');
                 }else{
-                    toastr.warning('Pas de dettes');
+                    toastr.warning('Customer has no due amount');
                 }
             }, 1000);
         });
