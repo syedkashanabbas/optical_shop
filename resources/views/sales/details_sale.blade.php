@@ -58,7 +58,7 @@
     pointer-events: none;
     z-index: 0;
   ">
-    Optical Solutions
+    Rubi Optical
     
   </div>
   <!-- INFO SECTION -->
