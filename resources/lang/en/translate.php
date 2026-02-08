@@ -1225,7 +1225,7 @@ return [
     'Time_Zone' =>'Time Zone',
     'Payment_note' =>'Payment notes',
     'sale_note' =>'Sale notes',
-    'Total_Sale_Due' =>'Total Sale Due',
+    'Total_Sale_Due' =>'Remaining Balance',
     'Total_Sell_Return_Due' =>'Total Sell Return Due',
     'pay_all_sell_due_at_a_time' =>'pay all sell due at a time',
     'pay_all_sell_return_due_at_a_time' =>'pay all sell return due at a time',

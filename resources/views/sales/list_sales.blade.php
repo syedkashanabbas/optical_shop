@@ -42,7 +42,7 @@
                   <th>{{ __('translate.Created_by') }}</th>
                   <th>{{ __('translate.Customer') }}</th>
                   <th>{{ __('translate.warehouse') }}</th>
-                  <th>{{ __('Assigned Driver') }}</th>
+                  <th class="d-none">{{ __('Assigned Driver') }}</th>
                   {{-- <th>{{ __('translate.Total') }}</th>
                   <th>{{ __('translate.Paid') }}</th>
                   <th>{{ __('translate.Due') }}</th> --}}
@@ -384,7 +384,7 @@
                         },
                         {
                             // 'targets': [1,4,5,6,7,8,9,10],
-                            'targets': [1,4,5,6,7,8],
+                            'targets': [1,4,5,6,7],
                             "orderable": false,
                         },
                   ],
@@ -410,7 +410,7 @@
                     {data: 'created_by'},
                     {data: 'client_name'},
                     {data: 'warehouse_name'},
-                    {data: 'assigned_driver'},
+                    // {data: 'assigned_driver'},
                   
                     {data: 'payment_status'},
                 
@@ -640,7 +640,7 @@
             accounts:[],
             errors:[],
             sales: [], 
-            drivers: [], 
+            // drivers: [], 
             shipment: {},
             sale: {},
             sale_due:'',

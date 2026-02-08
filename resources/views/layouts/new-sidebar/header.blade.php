@@ -37,7 +37,7 @@
                     @can('purchases_add')
                         <li><a class="dropdown-item" href="/purchase/purchases/create"> <i class="i-Receipt text-20 me-2 "></i> {{ __('translate.AddPurchase') }}</a></li>
                     @endcan
-                    @can('adjustment_add')
+                    {{-- @can('adjustment_add')
                         <li><a class="dropdown-item" href="/adjustment/adjustments/create"> <i class="i-Edit-Map text-20 me-2 "></i> {{ __('translate.CreateAdjustment') }}</a></li>
                     @endcan
                     @can('transfer_add')
@@ -45,7 +45,7 @@
                     @endcan
                     @can('quotations_add')
                         <li><a class="dropdown-item" href="/quotation/quotations/create"> <i class="i-Checkout-Basket text-20 me-2 "></i> {{ __('translate.Add_Quotation') }}</a></li>
-                    @endcan
+                    @endcan --}}
                   
                 </ul>
         </div>

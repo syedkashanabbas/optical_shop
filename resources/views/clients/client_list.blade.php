@@ -37,7 +37,7 @@
                                 <th>{{ __('translate.FullName') }}</th>
                                 <th>{{ __('translate.Phone') }}</th>
                                 <th>{{ __('translate.Total_Sale_Due') }}</th>
-                                <th>{{ __('translate.Total_Sell_Return_Due') }}</th>
+                                <th class="d-none">{{ __('translate.Total_Sell_Return_Due') }}</th>
                                 <th>{{ __('translate.Status') }}</th>
                             </tr>
                         </thead>
@@ -93,7 +93,7 @@
                                             placeholder="{{ __('translate.Paying_Amount') }}" type="text"
                                             class="form-control">
                                         <div class="error">@{{ validationContext.errors[0] }}</div>
-                                        <span class="badge badge-danger">reste à payer : {{$currency}} @{{ sell_due }}</span>
+                                        <span class="badge badge-danger">paying Amount : {{$currency}} @{{ sell_due }}</span>
                                     </validation-provider>
                                 </div>
     
@@ -197,7 +197,7 @@
                                             placeholder="{{ __('translate.Paying_Amount') }}" type="text"
                                             class="form-control">
                                         <div class="error">@{{ validationContext.errors[0] }}</div>
-                                        <span class="badge badge-danger">reste à payer : {{$currency}} @{{ return_due }}</span>
+                                        <span class="badge badge-danger">Paying Amount: {{$currency}} @{{ return_due }}</span>
                                     </validation-provider>
                                 </div>
 
@@ -297,7 +297,12 @@
                         'searchable': false,
                     },
                     {
-                        'targets': [1,2,5,6,7,8],
+                    targets: [7],
+                    visible: false,
+                    searchable: false
+                    } ,
+                    {
+                        'targets': [1,2,5,6,8],
                         "orderable": false,
                     },
                 ],

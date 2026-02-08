@@ -188,7 +188,7 @@
             @endif
 
             {{-- Stock Adjustment --}}
-            @if (auth()->user()->can('adjustment_view_all') || auth()->user()->can('adjustment_view_own') || auth()->user()->can('adjustment_add'))
+            {{-- @if (auth()->user()->can('adjustment_view_all') || auth()->user()->can('adjustment_view_own') || auth()->user()->can('adjustment_add'))
                 <li>
                     <div 
                         @click="selectCollapse('adjustment')"
@@ -226,7 +226,7 @@
                         </ul>
                     </div>
                 </li>  
-            @endif
+            @endif --}}
 
             {{-- Purchases --}}
             @if (auth()->user()->can('purchases_view_all') || auth()->user()->can('purchases_view_own') || auth()->user()->can('purchases_add'))

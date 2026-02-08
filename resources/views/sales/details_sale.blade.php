@@ -94,7 +94,7 @@
       </div>
       <div>{{ __('translate.date') }} : @{{sale.date}}</div>
       <div>{{ __('translate.warehouse') }} : @{{sale.warehouse}}</div>
-      <div>{{ __('Rider') }} : @{{sale.assigned_driver}}</div>
+      {{-- <div>{{ __('Rider') }} : @{{sale.assigned_driver}}</div> --}}
     </div>
   </div>
 

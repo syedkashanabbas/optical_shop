@@ -65,7 +65,7 @@
               </div>
 
               <!-- Assigned Driver -->
-              <div class="form-group col-md-4">
+              {{-- <div class="form-group col-md-4">
                 <validation-provider name="assigned_driver" v-slot="{ valid, errors }">
                   <label>{{ __('Assigned Driver') }}</label>
                   <v-select 
@@ -76,7 +76,7 @@
                   </v-select>
                   <span class="error">@{{ errors[0] }}</span>
                 </validation-provider>
-              </div>
+              </div> --}}
             </div>
           </div>
         </div>
