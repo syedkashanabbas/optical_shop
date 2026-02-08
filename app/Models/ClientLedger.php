@@ -16,6 +16,7 @@ class ClientLedger extends Model
         'debit',
         'credit',
         'balance',
+        'payment_type',
     ];
 
     protected $casts = [
