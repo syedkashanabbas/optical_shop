@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Log;
 
 class ClientLedgerService
 {
-    public static function log($clientId, $type, $ref, $debit = 0, $credit = 0, $note = null)
+    public static function log($clientId, $type, $ref, $debit = 0, $credit = 0, $note = null,$paymentType = null)
     {
         try {
             Log::info("ClientLedgerService called:", [
@@ -32,6 +32,7 @@ class ClientLedgerService
                 'credit'    => $credit,
                 'balance'   => $balance,
                 'note'      => $note,
+                'payment_type' => $paymentType, 
             ]);
 
             Log::info("Client ledger entry created", $entry->toArray());

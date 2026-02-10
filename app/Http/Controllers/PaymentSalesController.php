@@ -109,6 +109,9 @@ class PaymentSalesController extends Controller
                     'notes'             => $request['notes'],
                     'user_id'           => Auth::user()->id,
                 ]);
+                $paymentMethod = \App\Models\PaymentMethod::find($request['payment_method_id']);
+                $paymentType   = $paymentMethod?->title; // nullable safe
+
 
                 // Update Account balance
                 $account = Account::find($request['account_id']);
@@ -118,7 +121,7 @@ class PaymentSalesController extends Controller
                     ]);
                 }
 
-                // 🔁 Account Ledger Entry Here
+            
                 \App\Services\AccountLedgerService::log(
                     $request['account_id'],
                     'sale_payment',
@@ -127,15 +130,15 @@ class PaymentSalesController extends Controller
                     $request['amount']
                 );
 
-// 🔁 Client Ledger Entry Here
-                \App\Services\ClientLedgerService::log(
-                    $sale->client_id,
-                    'sale_payment',
-                    $payment->Ref,
-                    0,
-                    $request['amount']
-                );
-
+              \App\Services\ClientLedgerService::log(
+                $sale->client_id,
+                'sale_payment',
+                $payment->Ref,
+                0,
+                $request['amount'],
+                null,         
+                $paymentType   
+            );
                 // Update Sale
                 $sale->update([
                     'paid_amount'    => $total_paid,
