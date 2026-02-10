@@ -804,8 +804,27 @@ class ProductsController extends Controller
 
             $item['is_imei'] = $Product->is_imei ? true : false;
 
-            $item['current_stock'] = $Product->current_stock ?? 0;
+            // $item['current_stock'] = $Product->current_stock ?? 0;
+            if ($Product->type === 'is_single') {
 
+                    if ($user_auth->is_all_warehouses) {
+                        $array_warehouses_id = Warehouse::whereNull('deleted_at')->pluck('id')->toArray();
+                    } else {
+                        $array_warehouses_id = UserWarehouse::where('user_id', $user_auth->id)
+                            ->pluck('warehouse_id')
+                            ->toArray();
+                    }
+
+                    $current_stock = product_warehouse::where('product_id', $Product->id)
+                        ->whereIn('warehouse_id', $array_warehouses_id)
+                        ->whereNull('deleted_at')
+                        ->sum('qte');
+
+                    $item['current_stock'] = $current_stock;
+
+                } else {
+                    $item['current_stock'] = 0;
+                }
             $data = $item;
             $categories = Category::where('deleted_at', null)->get(['id', 'name']);
             $brands = Brand::where('deleted_at', null)->get(['id', 'name']);

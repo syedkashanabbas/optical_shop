@@ -36,7 +36,7 @@ class UserSeeder extends Seeder
         $user->assignRole(1);
 
         $warehouse = Warehouse::create([
-            'name' => 'default',
+            'name' => 'optical shop',
         ]);
 
         UserWarehouse::insert([
