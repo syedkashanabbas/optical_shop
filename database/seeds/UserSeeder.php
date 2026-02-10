@@ -1,11 +1,13 @@
 <?php
 
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\UserWarehouse;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\User;
 use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
 
 class UserSeeder extends Seeder
 {
@@ -16,7 +18,7 @@ class UserSeeder extends Seeder
      */
     public function run()
     {
-       // Insert some stuff
+        // Insert some stuff
         DB::table('users')->insert(
             array(
                 'id' => 1,
@@ -29,7 +31,17 @@ class UserSeeder extends Seeder
                 'status' => 1,
             )
         );
+
         $user = User::findOrFail(1);
         $user->assignRole(1);
+
+        $warehouse = Warehouse::create([
+            'name' => 'default',
+        ]);
+
+        UserWarehouse::insert([
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+        ]);
     }
 }

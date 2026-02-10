@@ -33,6 +33,7 @@ class CreateProductsTable extends Migration {
 			$table->text('note')->nullable();
 			$table->float('stock_alert', 10, 0)->nullable()->default(0);
 			$table->float('qty_min', 10, 0)->nullable()->default(0);
+            $table->decimal('current_stock', 10, 0)->nullable()->default(0);
 			$table->boolean('is_promo')->default(0);
 			$table->float('promo_price', 10, 0)->default(0);
 			$table->date('promo_start_date')->nullable();

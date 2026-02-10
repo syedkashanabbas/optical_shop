@@ -10,9 +10,30 @@ class Product extends Model
     protected $dates = ['deleted_at'];
 
     protected $fillable = [
-        'code', 'Type_barcode', 'name', 'cost', 'price', 'unit_id', 'unit_sale_id', 'unit_purchase_id',
-        'stock_alert', 'category_id', 'sub_category_id', 'is_variant','is_imei','is_promo','promo_price','promo_start_date','promo_end_date',
-        'tax_method', 'image', 'brand_id', 'is_active', 'note','qty_min'
+        'code',
+        'Type_barcode',
+        'name',
+        'cost',
+        'price',
+        'unit_id',
+        'unit_sale_id',
+        'unit_purchase_id',
+        'stock_alert',
+        'current_stock',
+        'category_id',
+        'sub_category_id',
+        'is_variant',
+        'is_imei',
+        'is_promo',
+        'promo_price',
+        'promo_start_date',
+        'promo_end_date',
+        'tax_method',
+        'image',
+        'brand_id',
+        'is_active',
+        'note',
+        'qty_min'
     ];
 
     protected $casts = [
@@ -28,6 +49,7 @@ class Product extends Model
         'cost' => 'double',
         'price' => 'double',
         'stock_alert' => 'double',
+        'current_stock' => 'double',
         'qty_min' => 'double',
         'TaxNet' => 'double',
         'is_promo' => 'integer',
@@ -82,5 +104,45 @@ class Product extends Model
     {
         return $this->hasMany(ProductLedger::class);
     }
-    
+
+    public static function booted()
+    {
+        // static::updated(function ($product) {
+        //     self::syncProductQty($product);
+        // });
+    }
+
+    public static function syncProductQty($product)
+    {
+        $array_warehouses_id = auth()->user()
+            ->assignedWarehouses()
+            ->pluck('warehouses.id'); // or just 'id' if no ambiguity
+
+        // dd();
+
+        $product_warehouse = product_warehouse::where('product_id', $product->id)
+            ->whereIn('warehouse_id', $array_warehouses_id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        $product_warehouse->qte = $product->current_stock ?? 0;
+        $product_warehouse->save();
+    }
+
+    public static function syncProductQtyByReq($product, $request)
+    {
+
+        $array_warehouses_id = auth()->user()
+            ->assignedWarehouses()
+            ->pluck('warehouses.id');
+
+        $product_warehouse = product_warehouse::where('product_id', $product->id)
+            ->whereIn('warehouse_id', $array_warehouses_id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        $product_warehouse->qte = $request['current_stock'];
+
+        $product_warehouse->save();
+    }
 }
