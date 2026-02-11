@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\ProductLedgerController;
 use App\Http\Controllers\ProviderLedgerController;
 use App\Http\Controllers\AccountLedgerController;
+use App\Http\Controllers\SalesController;
+
 use App\Exports\LedgerExport;
 
 Route::get('/fix-laravel', function () {
@@ -195,7 +197,7 @@ if ($installed === true) {
                 Route::prefix('sale')->group(function() {
                     Route::resource('sales', 'SalesController');
                     Route::post('get_sales_datatable', 'SalesController@get_sales_datatable')->name('sales_datatable');
-
+                     Route::get('/customer-balance/{id}', [SalesController::class, 'getCustomerBalance'])->name('sale.customer.balance');
                     Route::post('sales/send/email', 'SalesController@Send_Email');
                     Route::get('sales/payments/{id}', 'SalesController@Payments_Sale');
                     Route::get('get_Products_by_sale/{id}', 'SalesController@get_Products_by_sale');

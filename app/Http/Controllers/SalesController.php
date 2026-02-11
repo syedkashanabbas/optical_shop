@@ -1754,5 +1754,53 @@ $updated_balance = $previous_balance + ($sale_data->GrandTotal - $sale_data->pai
             return $amount . ' ' . $this->currency;
         }
     }
+    public function getCustomerBalance($id)
+{
+    $client = Client::where('deleted_at', null)->find($id);
+    
+    if (!$client) {
+        return response()->json(['balance' => 0]);
+    }
+    
+    // Sell due calculate (sales - paid)
+    $total_amount = DB::table('sales')
+        ->where('deleted_at', null)
+        ->where('client_id', $id)
+        ->sum('GrandTotal');
+    
+    $total_paid = DB::table('sales')
+        ->where('deleted_at', null)
+        ->where('client_id', $id)
+        ->sum('paid_amount');
+    
+    $sell_due = $total_amount - $total_paid;
+    
+    // Opening balance
+    $opening_balance = $client->opening_balance ?? 0;
+    $total_due = $sell_due + $opening_balance;
+    
+    // Return due calculate (sale_returns - paid)
+    $total_amount_return = DB::table('sale_returns')
+        ->where('deleted_at', null)
+        ->where('client_id', $id)
+        ->sum('GrandTotal');
+    
+    $total_paid_return = DB::table('sale_returns')
+        ->where('deleted_at', null)
+        ->where('client_id', $id)
+        ->sum('paid_amount');
+    
+    $total_return_Due = $total_amount_return - $total_paid_return;
+    
+    // Final balance = total_due - total_return_Due
+    $final_balance = $total_due - $total_return_Due;
+    
+    return response()->json([
+        'balance' => $final_balance ?? 0,
+        'sell_due' => $sell_due,
+        'opening_balance' => $opening_balance,
+        'return_due' => $total_return_Due
+    ]);
+}
 
 }
