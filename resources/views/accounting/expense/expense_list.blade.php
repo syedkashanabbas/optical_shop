@@ -211,7 +211,7 @@
                     
                     // Update footer
                     var numberRenderer = $.fn.dataTable.render.number(',', '.', 2).display;
-                    $(api.column(4).footer()).html(numberRenderer(amount) + ' DH');
+                    $(api.column(4).footer()).html(numberRenderer(amount) + ' PKR');
                 },
 
             

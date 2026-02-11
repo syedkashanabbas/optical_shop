@@ -193,9 +193,9 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
                                 }
 
                                  //check if user has permission "payment_sale_return"
-                                 if ($user_auth->can('pay_sale_return_due')){
-                                    $item['action'] .=  '<a class="dropdown-item payment_sale_return cursor-pointer"  id="' .$client->id. '" > <i class="nav-icon i-Dollar font-weight-bold mr-2"></i> '.trans('translate.pay_all_sell_return_due_at_a_time').'</a>';
-                                }
+                                //  if ($user_auth->can('pay_sale_return_due')){
+                                //     $item['action'] .=  '<a class="dropdown-item payment_sale_return cursor-pointer"  id="' .$client->id. '" > <i class="nav-icon i-Dollar font-weight-bold mr-2"></i> '.trans('translate.pay_all_sell_return_due_at_a_time').'</a>';
+                                // }
 
                                 //check if user has permission "client_delete"
                                 if ($user_auth->can('client_delete')){
@@ -525,85 +525,6 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
     }
 
 
-     //------------- clients_pay_due -------------\\
-
-//      public function clients_pay_due(Request $request)
-//      {
-//         $user_auth = auth()->user();
-// 		if ($user_auth->can('pay_sale_due')){
-
-//             request()->validate([
-//                 'client_id'           => 'required',
-//                 'payment_method_id'   => 'required',
-//             ]);
-
-//             if($request['montant'] > 0){
-//                 $client_sales_due = Sale::where('deleted_at', '=', null)
-//                 ->where([
-//                     ['payment_statut', '!=', 'paid'],
-//                     ['client_id', $request->client_id]
-//                 ])->get();
-
-//                     $paid_amount_total = $request->montant;
-
-
-//                         foreach($client_sales_due as $key => $client_sale){
-//                             if($paid_amount_total == 0)
-//                             break;
-//                             $due = $client_sale->GrandTotal  - $client_sale->paid_amount;
-
-//                             if($paid_amount_total >= $due){
-//                                 $amount = $due;
-//                                 $payment_status = 'paid';
-//                             }else{
-//                                 $amount = $paid_amount_total;
-//                                 $payment_status = 'partial';
-//                             }
-
-//                             $payment_sale = new PaymentSale();
-//                             $payment_sale->date = $request['date'];
-//                             $payment_sale->account_id =  $request['account_id']?$request['account_id']:NULL;
-//                             $payment_sale->sale_id = $client_sale->id;
-//                             $payment_sale->Ref = $this->generate_random_code_payment();
-//                             $payment_sale->payment_method_id = $request['payment_method_id'];
-//                             $payment_sale->montant = $amount;
-//                             $payment_sale->change = 0;
-//                             $payment_sale->notes = $request['notes'];
-//                             $payment_sale->user_id = Auth::user()->id;
-//                             $payment_sale->save();
-
-//                             \App\Services\ClientLedgerService::log(
-//     $request->client_id,
-//     'sale_payment',
-//     $payment_sale->Ref,
-//     0,
-//     $amount
-// );
-//                             $account = Account::where('id', $request['account_id'])->exists();
-
-//                             if ($account) {
-//                                 // Account exists, perform the update
-//                                 $account = Account::find($request['account_id']);
-//                                 $account->update([
-//                                     'initial_balance' => $account->initial_balance + $amount,
-//                                 ]);
-//                             }
-
-//                             $client_sale->paid_amount += $amount;
-//                             $client_sale->payment_statut = $payment_status;
-//                             $client_sale->save();
-
-//                             $paid_amount_total -= $amount;
-//                         }
-
-//             }
-            
-//             return response()->json(['success' => true]);
-
-//         }
-//         return abort('403', __('You are not authorized'));
- 
-//      }
     public function clients_pay_due(Request $request)
 {
     $user_auth = auth()->user();
@@ -696,12 +617,18 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
             $payment_sale->user_id = Auth::id();
             $payment_sale->save();
 
+            $paymentMethod = \App\Models\PaymentMethod::find($request['payment_method_id']);
+            $paymentType   = $paymentMethod?->title; // nullable safe
+
+
             \App\Services\ClientLedgerService::log(
                 $client->id,
                 'sale_payment',
                 $payment_sale->Ref,
                 0,
-                $amount
+                $amount,
+                null,         
+                $paymentType   
             );
 
             if ($request->account_id) {
@@ -807,6 +734,7 @@ $item['total_due'] = $this->render_price_with_symbol_placement(number_format($fi
                 $payment_sale_return->notes = $request['notes'];
                 $payment_sale_return->user_id = Auth::id();
                 $payment_sale_return->save();
+                
 
                 // Client Ledger Log
                 \App\Services\ClientLedgerService::log(

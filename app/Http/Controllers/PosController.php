@@ -151,7 +151,7 @@ class PosController extends Controller
               // Now generate the correct Ref using the ID
             $order->Ref = 'SO-' . date("Ymd") . '-' . $order->id;
             $order->save(); // Update only the Ref
-
+        
 \App\Services\ClientLedgerService::log(
     $request->client_id,
     'pos_sale',              // type = POS sale
@@ -231,49 +231,6 @@ class PosController extends Controller
 
             SaleDetail::insert($orderDetails);
 
-            // if($request['montant'] > 0){
-
-            //     $sale = Sale::findOrFail($order->id);
-
-            //     $total_paid = $sale->paid_amount + $request['montant'];
-            //     $due = $sale->GrandTotal - $total_paid;
-
-            //     if ($due === 0.0 || $due < 0.0) {
-            //         $payment_statut = 'paid';
-            //     } else if ($due != $sale->GrandTotal) {
-            //         $payment_statut = 'partial';
-            //     } else if ($due == $sale->GrandTotal) {
-            //         $payment_statut = 'unpaid';
-            //     }
-
-            //     PaymentSale::create([
-            //         'sale_id'    => $order->id,
-            //         'account_id' => $request['account_id']?$request['account_id']:NULL,
-            //         'Ref'        => $this->generate_random_code_payment(),
-            //         'date'       => $request['date'],
-            //         'payment_method_id'  => $request['payment_method_id'],
-            //         'montant'    => $request['montant'],
-            //         'change'     => 0,
-            //         'notes'      => $request['payment_notes'],
-            //         'user_id'    => Auth::user()->id,
-            //     ]);
-
-            //     $account = Account::where('id', $request['account_id'])->exists();
-
-            //     if ($account) {
-            //         // Account exists, perform the update
-            //         $account = Account::find($request['account_id']);
-            //         $account->update([
-            //             'initial_balance' => $account->initial_balance + $request['montant'],
-            //         ]);
-            //     }
-
-            //     $sale->update([
-            //         'paid_amount' => $total_paid,
-            //         'payment_statut' => $payment_statut,
-            //     ]);
-
-            // } 
               if ($request['montant'] > 0) {
 
     $sale = Sale::findOrFail($order->id);

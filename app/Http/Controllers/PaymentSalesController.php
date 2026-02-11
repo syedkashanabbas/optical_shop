@@ -240,6 +240,10 @@ class PaymentSalesController extends Controller
                     'montant'           => $request['montant'],
                     'notes'             => $request['notes'],
                 ]);
+                $paymentMethod = \App\Models\PaymentMethod::find($request['payment_method_id']);
+                $paymentType   = $paymentMethod?->title; // nullable safe
+
+
 
                 // 🔁 Apply new account balance
                 if ($request['account_id']) {
@@ -266,7 +270,9 @@ class PaymentSalesController extends Controller
                     'sale_payment',
                     $payment->Ref,
                     $request['montant'],
-                    0
+                    0,
+                    null,
+                    $paymentType   
                 );
 
                 // ✅ Update Sale

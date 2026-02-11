@@ -1227,7 +1227,7 @@ return [
     'sale_note' =>'Sale notes',
     'Total_Sale_Due' =>'Remaining Balance',
     'Total_Sell_Return_Due' =>'Total Sell Return Due',
-    'pay_all_sell_due_at_a_time' =>'pay all sell due at a time',
+    'pay_all_sell_due_at_a_time' =>'Collect Remaining Balance',
     'pay_all_sell_return_due_at_a_time' =>'pay all sell return due at a time',
     'Gross_Profit' =>'Gross Profit',
     'pay_all_purchase_due_at_a_time' =>'pay all purchase due at a time',

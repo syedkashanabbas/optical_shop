@@ -28,7 +28,8 @@ class ClientLedgerExport implements FromCollection, WithHeadings, Responsable
                 'type',
                 'debit',
                 'credit',
-                'balance'
+                'balance',
+                'payment_type'
             ]);
     }
 
@@ -41,6 +42,7 @@ class ClientLedgerExport implements FromCollection, WithHeadings, Responsable
             'Debit',
             'Credit',
             'Balance',
+            'Payment Type'
         ];
     }
 }

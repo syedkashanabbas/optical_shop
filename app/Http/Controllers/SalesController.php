@@ -392,6 +392,10 @@ public function index(Request $request)
                     $payment->user_id = Auth::user()->id;
                     $payment->save();
                     
+                    $paymentMethod = \App\Models\PaymentMethod::find($request['payment_method_id']);
+                    $paymentType   = $paymentMethod?->title; // nullable safe
+
+
                     // Update account balance if account_id is provided
                     if ($request->account_id) {
                         $account = Account::find($request->account_id);
@@ -410,7 +414,9 @@ public function index(Request $request)
                     'sale',
                     $order->Ref,
                     $order->GrandTotal,
-                    $pay_amount
+                    $pay_amount,
+                    null,
+                   $paymentType  
                 );
 
                 $client = Client::find($request->client_id);
