@@ -882,7 +882,7 @@
         //-- check Qty of  details order if Null or zero
         verifiedForm() {
           if (this.details.length <= 0) {
-              toastr.error('Veuillez ajouter le produit');
+              toastr.error('Please add the product.');
               return false;
             } else {
               var count = 0;

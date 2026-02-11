@@ -235,10 +235,7 @@ class ProductsController extends Controller
                 if ($user_auth->can('products_delete')) {
                     $item['action'] .= '  <a class="delete dropdown-item cursor-pointer" id="' . $product->id . '"><i class="nav-icon i-Close-Window text-danger font-weight-bold mr-3"></i> ' . trans('translate.delete_product') . '</a>';
                 }
-                if ($user_auth->can('products_delete')) {
-                    $item['action'] .= '<a class="dropdown-item" href="' . route('product.ledger.download', $product->id) . '">
-                        <i class="nav-icon i-Download text-primary font-weight-bold mr-3"></i>Download Ledger</a>';
-                }
+               
                 $item['action'] .= '</div>';
 
 

@@ -285,157 +285,206 @@ public function index(Request $request)
         }
     }
 
-
     /**
      * Show the form for creating a new resource.
      * @return Renderable
      */
-public function create()
-{
-    $user_auth = auth()->user();
-    if ($user_auth->can('sales_add')) {
+    public function create()
+    {
+        $user_auth = auth()->user();
+        if ($user_auth->can('sales_add')) {
 
-        // Get warehouses
-        if ($user_auth->is_all_warehouses) {
-            $warehouses = Warehouse::where('deleted_at', '=', null)->get(['id', 'name']);
-        } else {
-            $warehouses_id = UserWarehouse::where('user_id', $user_auth->id)->pluck('warehouse_id')->toArray();
-            $warehouses = Warehouse::where('deleted_at', '=', null)->whereIn('id', $warehouses_id)->get(['id', 'name']);
+            // Get warehouses
+            if ($user_auth->is_all_warehouses) {
+                $warehouses = Warehouse::where('deleted_at', '=', null)->get(['id', 'name']);
+            } else {
+                $warehouses_id = UserWarehouse::where('user_id', $user_auth->id)->pluck('warehouse_id')->toArray();
+                $warehouses = Warehouse::where('deleted_at', '=', null)->whereIn('id', $warehouses_id)->get(['id', 'name']);
+            }
+
+            // Clients
+            $clients = Client::where('deleted_at', '=', null)->get(['id', 'username', 'address']);
+
+            // Users for assigned driver
+            $users = User::where('deleted_at', null)->get(['id', 'username']);
+
+            // Payment Methods
+            $payment_methods = PaymentMethod::where('deleted_at', '=', null)->get(['id', 'title']);
+
+            // Accounts
+            $accounts = Account::where('deleted_at', '=', null)->get(['id', 'account_name']);
+
+            return view('sales.create_sale', [
+                'clients' => $clients,
+                'warehouses' => $warehouses,
+                'users' => $users,
+                'payment_methods' => $payment_methods,
+                'accounts' => $accounts,
+            ]);
         }
 
-        // Clients
-        $clients = Client::where('deleted_at', '=', null)->get(['id', 'username', 'address']);
-
-        // Users for assigned driver
-        $users = User::where('deleted_at', null)->get(['id', 'username']);
-
-        return view('sales.create_sale', [
-            'clients' => $clients,
-            'warehouses' => $warehouses,
-            'users' => $users, // Pass to view
-        ]);
+        return abort('403', __('You are not authorized'));
     }
-
-    return abort('403', __('You are not authorized'));
-}
-
 
     /**
      * Store a newly created resource in storage.
      * @param Request $request
      * @return Renderable
      */
-  public function store(Request $request)
-{
-    $user_auth = auth()->user();
+    public function store(Request $request)
+    {
+        $user_auth = auth()->user();
 
-    if ($user_auth->can('sales_add')) {
+        if ($user_auth->can('sales_add')) {
 
-        \DB::transaction(function () use ($request, &$order) {
-            $order = new Sale;
+            \DB::transaction(function () use ($request, &$order) {
+                $order = new Sale;
 
-            $order->is_pos = 0;
-            $order->date = $request->date;
-            $order->client_id = $request->client_id;
-            $order->GrandTotal = $request->GrandTotal;
-            $order->warehouse_id = $request->warehouse_id;
-            $order->tax_rate = $request->tax_rate;
-            $order->TaxNet = $request->TaxNet;
-            $order->discount = $request->discount;
-            $order->discount_type = $request->discount_type;
-            $order->discount_percent_total = $request->discount_percent_total;
-            $order->shipping = $request->shipping;
-            $order->statut = 'completed';
-            $order->payment_statut = 'unpaid';
-            $order->assigned_driver = $request->assigned_driver;
-            $order->notes = $request->notes;
-            $order->user_id = Auth::user()->id;
+                $order->is_pos = 0;
+                $order->date = $request->date;
+                $order->client_id = $request->client_id;
+                $order->GrandTotal = $request->GrandTotal;
+                $order->warehouse_id = $request->warehouse_id;
+                $order->tax_rate = $request->tax_rate;
+                $order->TaxNet = $request->TaxNet;
+                $order->discount = $request->discount;
+                $order->discount_type = $request->discount_type;
+                $order->discount_percent_total = $request->discount_percent_total;
+                $order->shipping = $request->shipping;
+                $order->statut = 'completed';
+                $order->assigned_driver = $request->assigned_driver;
+                $order->notes = $request->notes;
+                $order->user_id = Auth::user()->id;
 
-            // Save to get the ID
-            $order->save();
-
-            // Now generate the correct Ref using the ID
-            $order->Ref = 'SO-' . date("Ymd") . '-' . $order->id;
-            $order->save(); // Update only the Ref
-
-            // Log client ledger
-            // updated because of new logic in ClinetLedgerService
-            \App\Services\ClientLedgerService::log(
-                $request->client_id,
-                'sale',
-                $order->Ref,
-                $order->GrandTotal,
-                0
-            );
-
-            $client = Client::find($request->client_id);
-
-            $data = $request['details'];
-            $orderDetails = []; // Initialize the array
-
-            foreach ($data as $key => $value) {
-                $unit = Unit::where('id', $value['sale_unit_id'])->first();
-
-                $convertedQty = $value['quantity'];
-                if ($unit) {
-                    $convertedQty = $unit->operator == '/'
-                        ? $value['quantity'] / $unit->operator_value
-                        : $value['quantity'] * $unit->operator_value;
-                }
-
-                $orderDetails[] = [
-                    'date' => $request->date,
-                    'sale_id' => $order->id,
-                    'sale_unit_id' => $value['sale_unit_id'] ?? NULL,
-                    'quantity' => $value['quantity'],
-                    'price' => $value['Unit_price'],
-                    'TaxNet' => $value['tax_percent'],
-                    'tax_method' => $value['tax_method'],
-                    'discount' => $value['discount'],
-                    'discount_method' => $value['discount_Method'],
-                    'product_id' => $value['product_id'],
-                    'product_variant_id' => !empty($value['product_variant_id']) ? $value['product_variant_id'] : NULL,
-                    'total' => $value['subtotal'],
-                    'imei_number' => $value['imei_number'],
-                ];
-
-                if (!empty($value['product_variant_id'])) {
-                    $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                        ->where('warehouse_id', $order->warehouse_id)
-                        ->where('product_id', $value['product_id'])
-                        ->where('product_variant_id', $value['product_variant_id'])
-                        ->first();
+                // Calculate payment status based on pay_amount
+                $pay_amount = $request->pay_amount ?? 0;
+                $due = $request->GrandTotal - $pay_amount;
+                
+                if ($due <= 0) {
+                    $order->payment_statut = 'paid';
+                    $order->paid_amount = $request->GrandTotal;
+                } elseif ($pay_amount > 0) {
+                    $order->payment_statut = 'partial';
+                    $order->paid_amount = $pay_amount;
                 } else {
-                    $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                        ->where('warehouse_id', $order->warehouse_id)
-                        ->where('product_id', $value['product_id'])
-                        ->first();
+                    $order->payment_statut = 'unpaid';
+                    $order->paid_amount = 0;
                 }
 
-                if ($product_warehouse && $unit) {
-                    $product_warehouse->qte -= $convertedQty;
-                    $product_warehouse->save();
+                // Save to get the ID
+                $order->save();
+
+                // Now generate the correct Ref using the ID
+                $order->Ref = 'SO-' . date("Ymd") . '-' . $order->id;
+                $order->save(); // Update only the Ref
+
+                // Create payment record if pay_amount > 0
+                if ($pay_amount > 0) {
+                    $payment = new PaymentSale();
+                    $payment->sale_id = $order->id;
+                    $payment->Ref = 'PYT-' . date("Ymd") . '-' . (PaymentSale::count() + 1);
+                    $payment->date = $request->date;
+                    $payment->montant = $pay_amount;
+                    $payment->change = 0;
+                    $payment->payment_method_id = $request->payment_method_id ?? null;
+                    $payment->account_id = $request->account_id ?? null;
+                    $payment->notes = $request->payment_notes ?? 'Initial payment during sale creation';
+                    $payment->user_id = Auth::user()->id;
+                    $payment->save();
+                    
+                    // Update account balance if account_id is provided
+                    if ($request->account_id) {
+                        $account = Account::find($request->account_id);
+                        if ($account) {
+                            $account->update([
+                                'initial_balance' => $account->initial_balance + $pay_amount,
+                            ]);
+                        }
+                    }
                 }
 
-                \App\Services\LedgerService::log(
-                    $value['product_id'],
+                // Log client ledger
+                // updated because of new logic in ClinetLedgerService
+                \App\Services\ClientLedgerService::log(
+                    $request->client_id,
                     'sale',
                     $order->Ref,
-                    0,
-                    $convertedQty,
-                    $client->username ?? 'Walk-In Customer',
-                    $value['code'] ?? null
+                    $order->GrandTotal,
+                    $pay_amount
                 );
-            }
 
-            SaleDetail::insert($orderDetails);
-        }, 10);
+                $client = Client::find($request->client_id);
 
-        return response()->json(['success' => true, 'id' => $order->id]);
+                $data = $request['details'];
+                $orderDetails = []; // Initialize the array
+
+                foreach ($data as $key => $value) {
+                    $unit = Unit::where('id', $value['sale_unit_id'])->first();
+
+                    $convertedQty = $value['quantity'];
+                    if ($unit) {
+                        $convertedQty = $unit->operator == '/'
+                            ? $value['quantity'] / $unit->operator_value
+                            : $value['quantity'] * $unit->operator_value;
+                    }
+
+                    $orderDetails[] = [
+                        'date' => $request->date,
+                        'sale_id' => $order->id,
+                        'sale_unit_id' => $value['sale_unit_id'] ?? NULL,
+                        'quantity' => $value['quantity'],
+                        'price' => $value['Unit_price'],
+                        'TaxNet' => $value['tax_percent'],
+                        'tax_method' => $value['tax_method'],
+                        'discount' => $value['discount'],
+                        'discount_method' => $value['discount_Method'],
+                        'product_id' => $value['product_id'],
+                        'product_variant_id' => !empty($value['product_variant_id']) ? $value['product_variant_id'] : NULL,
+                        'total' => $value['subtotal'],
+                        'imei_number' => $value['imei_number'],
+                    ];
+
+                    if (!empty($value['product_variant_id'])) {
+                        $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                            ->where('warehouse_id', $order->warehouse_id)
+                            ->where('product_id', $value['product_id'])
+                            ->where('product_variant_id', $value['product_variant_id'])
+                            ->first();
+                    } else {
+                        $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                            ->where('warehouse_id', $order->warehouse_id)
+                            ->where('product_id', $value['product_id'])
+                            ->first();
+                    }
+
+                    if ($product_warehouse && $unit) {
+                        $product_warehouse->qte -= $convertedQty;
+                        $product_warehouse->save();
+                    }
+
+                    \App\Services\LedgerService::log(
+                        $value['product_id'],
+                        'sale',
+                        $order->Ref,
+                        0,
+                        $convertedQty,
+                        $client->username ?? 'Walk-In Customer',
+                        $value['code'] ?? null
+                    );
+                }
+
+                SaleDetail::insert($orderDetails);
+            }, 10);
+
+            return response()->json(['success' => true, 'id' => $order->id]);
+        }
+
+        return abort('403', __('You are not authorized'));
     }
 
-    return abort('403', __('You are not authorized'));
-}
+ 
+
+
 
     /**
      * Show the specified resource.
@@ -624,17 +673,16 @@ $updated_balance = $previous_balance + ($sale_data->GrandTotal - $sale_data->pai
     return abort('403', __('You are not authorized'));
 }
 
-    /**
+  /**
      * Show the form for editing the specified resource.
      * @param int $id
      * @return Renderable
      */
-public function edit($id)
+    public function edit($id)
     {
-
         if (SaleReturn::where('sale_id', $id)->where('deleted_at', '=', null)->exists()) {
             return response()->json(['success' => false , 'Return exist for the Transaction' => false], 403);
-        }else{
+        } else {
 
             $user_auth = auth()->user();
             if ($user_auth->can('sales_edit')){
@@ -667,7 +715,6 @@ public function edit($id)
                         ->where('deleted_at', '=', null)
                         ->first()) {
                         $sale['client_id'] = $Sale_data->client_id;
-                    
                     } else {
                         $sale['client_id'] = '';
                     }
@@ -698,12 +745,15 @@ public function edit($id)
                 $sale['statut'] = $Sale_data->statut;
                 $sale['notes'] = $Sale_data->notes;
                 $sale['GrandTotal'] = $Sale_data->GrandTotal;
+                $sale['paid_amount'] = $Sale_data->paid_amount;
+                $sale['payment_statut'] = $Sale_data->payment_statut;
+                $sale['assigned_driver'] = $Sale_data->assigned_driver;
 
                 $detail_id = 0;
                 foreach ($Sale_data['details'] as $detail) {
 
-                        $unit = Unit::where('id', $detail->sale_unit_id)->first();
-                            
+                    $unit = Unit::where('id', $detail->sale_unit_id)->first();
+                        
                     if ($detail->product_variant_id) {
                         $item_product = product_warehouse::where('product_id', $detail->product_id)
                             ->where('deleted_at', '=', null)
@@ -717,8 +767,8 @@ public function edit($id)
                         $item_product ? $data['del'] = 0 : $data['del'] = 1;
                         $data['product_variant_id'] = $detail->product_variant_id;
 
-                       $data['code'] = $productsVariants->code;
-                       $data['name'] = '['.$productsVariants->name . '] ' . $detail['product']['name'];
+                        $data['code'] = $productsVariants->code;
+                        $data['name'] = '['.$productsVariants->name . '] ' . $detail['product']['name'];
                         
                         if ($unit && $unit->operator == '/') {
                             $stock = $item_product ? $item_product->qte * $unit->operator_value : 0;
@@ -745,47 +795,46 @@ public function edit($id)
                         } else {
                             $stock = 0;
                         }
-
                     }
                         
-                        $data['id'] = $detail->id;
-                        $data['stock'] = $detail['product']['type'] !='is_service'?$stock:'---';
-                        $data['product_type'] = $detail['product']['type'];
-                        $data['qty_min'] = $detail['product']['type'] !='is_service'?$detail['product']['qty_min']:'---';
-                        $data['detail_id'] = $detail_id += 1;
-                        $data['product_id'] = $detail->product_id;
-                        $data['total'] = $detail->total;
-                        $data['quantity'] = $detail->quantity;
-                        $data['qte_copy'] = $detail->quantity;
-                        $data['etat'] = 'current';
-                        $data['unitSale'] = $unit?$unit->ShortName:'';
-                        $data['sale_unit_id'] = $unit?$unit->id:'';
-                        $data['is_imei'] = $detail['product']['is_imei'];
-                        $data['imei_number'] = $detail->imei_number;
+                    $data['id'] = $detail->id;
+                    $data['stock'] = $detail['product']['type'] !='is_service'?$stock:'---';
+                    $data['product_type'] = $detail['product']['type'];
+                    $data['qty_min'] = $detail['product']['type'] !='is_service'?$detail['product']['qty_min']:'---';
+                    $data['detail_id'] = $detail_id += 1;
+                    $data['product_id'] = $detail->product_id;
+                    $data['total'] = $detail->total;
+                    $data['quantity'] = $detail->quantity;
+                    $data['qte_copy'] = $detail->quantity;
+                    $data['etat'] = 'current';
+                    $data['unitSale'] = $unit?$unit->ShortName:'';
+                    $data['sale_unit_id'] = $unit?$unit->id:'';
+                    $data['is_imei'] = $detail['product']['is_imei'];
+                    $data['imei_number'] = $detail->imei_number;
 
-                        if ($detail->discount_method == '2') {
-                            $data['DiscountNet'] = $detail->discount;
-                        } else {
-                            $data['DiscountNet'] = $detail->price * $detail->discount / 100;
-                        }
+                    if ($detail->discount_method == '2') {
+                        $data['DiscountNet'] = $detail->discount;
+                    } else {
+                        $data['DiscountNet'] = $detail->price * $detail->discount / 100;
+                    }
 
-                        $tax_price = $detail->TaxNet * (($detail->price - $data['DiscountNet']) / 100);
-                        $data['Unit_price'] = $detail->price;
-                        
-                        $data['tax_percent'] = $detail->TaxNet;
-                        $data['tax_method'] = $detail->tax_method;
-                        $data['discount'] = $detail->discount;
-                        $data['discount_Method'] = $detail->discount_method;
+                    $tax_price = $detail->TaxNet * (($detail->price - $data['DiscountNet']) / 100);
+                    $data['Unit_price'] = $detail->price;
+                    
+                    $data['tax_percent'] = $detail->TaxNet;
+                    $data['tax_method'] = $detail->tax_method;
+                    $data['discount'] = $detail->discount;
+                    $data['discount_Method'] = $detail->discount_method;
 
-                        if ($detail->tax_method == '1') {
-                            $data['Net_price'] = $detail->price - $data['DiscountNet'];
-                            $data['taxe'] = $tax_price;
-                            $data['subtotal'] = ($data['Net_price'] * $data['quantity']) + ($tax_price * $data['quantity']);
-                        } else {
-                            $data['Net_price'] = ($detail->price - $data['DiscountNet']) / (($detail->TaxNet / 100) + 1);
-                            $data['taxe'] = $detail->price - $data['Net_price'] - $data['DiscountNet'];
-                            $data['subtotal'] = ($data['Net_price'] * $data['quantity']) + ($tax_price * $data['quantity']);
-                        }
+                    if ($detail->tax_method == '1') {
+                        $data['Net_price'] = $detail->price - $data['DiscountNet'];
+                        $data['taxe'] = $tax_price;
+                        $data['subtotal'] = ($data['Net_price'] * $data['quantity']) + ($tax_price * $data['quantity']);
+                    } else {
+                        $data['Net_price'] = ($detail->price - $data['DiscountNet']) / (($detail->TaxNet / 100) + 1);
+                        $data['taxe'] = $detail->price - $data['Net_price'] - $data['DiscountNet'];
+                        $data['subtotal'] = ($data['Net_price'] * $data['quantity']) + ($tax_price * $data['quantity']);
+                    }
 
                     $details[] = $data;
                 }
@@ -855,7 +904,6 @@ public function edit($id)
                         $item['qte_purchase'] = $product_warehouse->qte;
                     }
 
-
                     $item['qte'] = $product_warehouse->qte;
                     $item['unitSale'] = $product_warehouse['product']['unitSale']?$product_warehouse['product']['unitSale']->ShortName:'';
                     $item['unitPurchase'] = $product_warehouse['product']['unitPurchase']?$product_warehouse['product']['unitPurchase']->ShortName:'';
@@ -876,11 +924,22 @@ public function edit($id)
                     $products_array[] = $item;
                 }
                 
-            
                 $clients = client::where('deleted_at', '=', null)->get(['id', 'username']);
         
                 // Users for assigned driver
                 $users = User::where('deleted_at', null)->get(['id', 'username']);
+
+                // Payment Methods
+                $payment_methods = PaymentMethod::where('deleted_at', '=', null)->get(['id', 'title']);
+
+                // Accounts
+                $accounts = Account::where('deleted_at', '=', null)->get(['id', 'account_name']);
+
+                // Get existing payment if any
+                $existing_payment = PaymentSale::where('sale_id', $id)->first();
+                $sale['pay_amount'] = $existing_payment ? $existing_payment->montant : $Sale_data->paid_amount;
+                $sale['payment_method_id'] = $existing_payment ? $existing_payment->payment_method_id : null;
+                $sale['account_id'] = $existing_payment ? $existing_payment->account_id : null;
 
                 return view('sales.edit_sale',
                     [
@@ -890,14 +949,14 @@ public function edit($id)
                         'warehouses' => $warehouses,
                         'products' => $products_array,
                         'users' => $users,
+                        'payment_methods' => $payment_methods,
+                        'accounts' => $accounts,
                     ]
                 );
 
             }
             return abort('403', __('You are not authorized'));
-
         }
-  
     }
 
     /**
@@ -910,7 +969,7 @@ public function edit($id)
     {
         if (SaleReturn::where('sale_id', $id)->where('deleted_at', '=', null)->exists()) {
             return response()->json(['success' => false , 'Return exist for the Transaction' => false], 403);
-        }else{
+        } else {
 
             $user_auth = auth()->user();
             if ($user_auth->can('sales_edit')){
@@ -935,118 +994,200 @@ public function edit($id)
                         $old_products_id[] = $value->id;
                         
                         $old_unit = Unit::where('id', $value['sale_unit_id'])->first();
-                    
 
-                            if ($value['product_variant_id']) {
-                                $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                                    ->where('warehouse_id', $current_Sale->warehouse_id)
-                                    ->where('product_id', $value['product_id'])
-                                    ->where('product_variant_id', $value['product_variant_id'])
-                                    ->first();
+                        if ($value['product_variant_id']) {
+                            $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                                ->where('warehouse_id', $current_Sale->warehouse_id)
+                                ->where('product_id', $value['product_id'])
+                                ->where('product_variant_id', $value['product_variant_id'])
+                                ->first();
 
-                                if ($product_warehouse && $old_unit) {
-                                    if ($old_unit->operator == '/') {
-                                        $product_warehouse->qte += $value['quantity'] / $old_unit->operator_value;
-                                    } else {
-                                        $product_warehouse->qte += $value['quantity'] * $old_unit->operator_value;
-                                    }
-                                    $product_warehouse->save();
+                            if ($product_warehouse && $old_unit) {
+                                if ($old_unit->operator == '/') {
+                                    $product_warehouse->qte += $value['quantity'] / $old_unit->operator_value;
+                                } else {
+                                    $product_warehouse->qte += $value['quantity'] * $old_unit->operator_value;
                                 }
-
-                            } else {
-                                $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                                    ->where('warehouse_id', $current_Sale->warehouse_id)
-                                    ->where('product_id', $value['product_id'])
-                                    ->first();
-                                if ($product_warehouse && $old_unit) {
-                                    if ($old_unit->operator == '/') {
-                                        $product_warehouse->qte += $value['quantity'] / $old_unit->operator_value;
-                                    } else {
-                                        $product_warehouse->qte += $value['quantity'] * $old_unit->operator_value;
-                                    }
-                                    $product_warehouse->save();
-                                }
+                                $product_warehouse->save();
                             }
 
-                            // Delete Detail
-                            if (!in_array($old_products_id[$key], $new_products_id)) {
-                                $SaleDetail = SaleDetail::findOrFail($value->id);
-                                $SaleDetail->delete();
+                        } else {
+                            $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                                ->where('warehouse_id', $current_Sale->warehouse_id)
+                                ->where('product_id', $value['product_id'])
+                                ->first();
+                            if ($product_warehouse && $old_unit) {
+                                if ($old_unit->operator == '/') {
+                                    $product_warehouse->qte += $value['quantity'] / $old_unit->operator_value;
+                                } else {
+                                    $product_warehouse->qte += $value['quantity'] * $old_unit->operator_value;
+                                }
+                                $product_warehouse->save();
                             }
-                        
+                        }
+
+                        // Delete Detail
+                        if (!in_array($old_products_id[$key], $new_products_id)) {
+                            $SaleDetail = SaleDetail::findOrFail($value->id);
+                            $SaleDetail->delete();
+                        }
                     }
 
                     // Update Data with New request
                     foreach ($new_sale_details as $prd => $prod_detail) {
                         
-                            $unit_prod = Unit::where('id', $prod_detail['sale_unit_id'])->first();
+                        $unit_prod = Unit::where('id', $prod_detail['sale_unit_id'])->first();
 
+                        if ($prod_detail['product_variant_id']) {
+                            $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                                ->where('warehouse_id', $request->warehouse_id)
+                                ->where('product_id', $prod_detail['product_id'])
+                                ->where('product_variant_id', $prod_detail['product_variant_id'])
+                                ->first();
 
-                            if ($prod_detail['product_variant_id']) {
-                                $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                                    ->where('warehouse_id', $request->warehouse_id)
-                                    ->where('product_id', $prod_detail['product_id'])
-                                    ->where('product_variant_id', $prod_detail['product_variant_id'])
-                                    ->first();
-
-                                if ($product_warehouse && $unit_prod) {
-                                    if ($unit_prod->operator == '/') {
-                                        $product_warehouse->qte -= $prod_detail['quantity'] / $unit_prod->operator_value;
-                                    } else {
-                                        $product_warehouse->qte -= $prod_detail['quantity'] * $unit_prod->operator_value;
-                                    }
-                                    $product_warehouse->save();
+                            if ($product_warehouse && $unit_prod) {
+                                if ($unit_prod->operator == '/') {
+                                    $product_warehouse->qte -= $prod_detail['quantity'] / $unit_prod->operator_value;
+                                } else {
+                                    $product_warehouse->qte -= $prod_detail['quantity'] * $unit_prod->operator_value;
                                 }
-
-                            } else {
-                                $product_warehouse = product_warehouse::where('deleted_at', '=', null)
-                                    ->where('warehouse_id', $request->warehouse_id)
-                                    ->where('product_id', $prod_detail['product_id'])
-                                    ->first();
-
-                                if ($product_warehouse && $unit_prod) {
-                                    if ($unit_prod->operator == '/') {
-                                        $product_warehouse->qte -= $prod_detail['quantity'] / $unit_prod->operator_value;
-                                    } else {
-                                        $product_warehouse->qte -= $prod_detail['quantity'] * $unit_prod->operator_value;
-                                    }
-                                    $product_warehouse->save();
-                                }
+                                $product_warehouse->save();
                             }
 
+                        } else {
+                            $product_warehouse = product_warehouse::where('deleted_at', '=', null)
+                                ->where('warehouse_id', $request->warehouse_id)
+                                ->where('product_id', $prod_detail['product_id'])
+                                ->first();
 
-                            $orderDetails['sale_id'] = $id;
-                            $orderDetails['date'] = $request['date'];
-                            $orderDetails['price'] = $prod_detail['Unit_price'];
-                            $orderDetails['sale_unit_id'] = $prod_detail['sale_unit_id']?$prod_detail['sale_unit_id']:NULL;
-                            $orderDetails['TaxNet'] = $prod_detail['tax_percent'];
-                            $orderDetails['tax_method'] = $prod_detail['tax_method'];
-                            $orderDetails['discount'] = $prod_detail['discount'];
-                            $orderDetails['discount_method'] = $prod_detail['discount_Method'];
-                            $orderDetails['quantity'] = $prod_detail['quantity'];
-                            $orderDetails['product_id'] = $prod_detail['product_id'];
-                            $orderDetails['product_variant_id'] = $prod_detail['product_variant_id']?$prod_detail['product_variant_id']:NULL;
-                            $orderDetails['total'] = $prod_detail['subtotal'];
-                            $orderDetails['imei_number'] = $prod_detail['imei_number'];
-
-                            if (!in_array($prod_detail['id'], $old_products_id)) {
-                                $orderDetails['sale_unit_id'] = $unit_prod ? $unit_prod->id : Null;
-                                SaleDetail::Create($orderDetails);
-                            } else {
-                                SaleDetail::where('id', $prod_detail['id'])->update($orderDetails);
+                            if ($product_warehouse && $unit_prod) {
+                                if ($unit_prod->operator == '/') {
+                                    $product_warehouse->qte -= $prod_detail['quantity'] / $unit_prod->operator_value;
+                                } else {
+                                    $product_warehouse->qte -= $prod_detail['quantity'] * $unit_prod->operator_value;
+                                }
+                                $product_warehouse->save();
                             }
+                        }
+
+                        $orderDetails['sale_id'] = $id;
+                        $orderDetails['date'] = $request['date'];
+                        $orderDetails['price'] = $prod_detail['Unit_price'];
+                        $orderDetails['sale_unit_id'] = $prod_detail['sale_unit_id']?$prod_detail['sale_unit_id']:NULL;
+                        $orderDetails['TaxNet'] = $prod_detail['tax_percent'];
+                        $orderDetails['tax_method'] = $prod_detail['tax_method'];
+                        $orderDetails['discount'] = $prod_detail['discount'];
+                        $orderDetails['discount_method'] = $prod_detail['discount_Method'];
+                        $orderDetails['quantity'] = $prod_detail['quantity'];
+                        $orderDetails['product_id'] = $prod_detail['product_id'];
+                        $orderDetails['product_variant_id'] = $prod_detail['product_variant_id']?$prod_detail['product_variant_id']:NULL;
+                        $orderDetails['total'] = $prod_detail['subtotal'];
+                        $orderDetails['imei_number'] = $prod_detail['imei_number'];
+
+                        if (!in_array($prod_detail['id'], $old_products_id)) {
+                            $orderDetails['sale_unit_id'] = $unit_prod ? $unit_prod->id : Null;
+                            SaleDetail::Create($orderDetails);
+                        } else {
+                            SaleDetail::where('id', $prod_detail['id'])->update($orderDetails);
+                        }
                     }
 
+                    // Update payment if pay_amount is provided
+                    $pay_amount = $request->pay_amount ?? 0;
+                    $existing_payment = PaymentSale::where('sale_id', $id)->first();
+                    
+                    if ($pay_amount > 0) {
+                        if ($existing_payment) {
+                            // Update existing payment
+                            $existing_payment->update([
+                                'montant' => $pay_amount,
+                                'payment_method_id' => $request->payment_method_id,
+                                'account_id' => $request->account_id,
+                                'date' => $request->date,
+                                'notes' => $request->payment_notes ?? 'Payment updated during sale edit',
+                            ]);
+                            
+                            // Update account balance if account changed
+                            if ($existing_payment->account_id != $request->account_id) {
+                                // Deduct from old account
+                                if ($existing_payment->account_id) {
+                                    $old_account = Account::find($existing_payment->account_id);
+                                    if ($old_account) {
+                                        $old_account->update([
+                                            'initial_balance' => $old_account->initial_balance - $existing_payment->montant,
+                                        ]);
+                                    }
+                                }
+                                
+                                // Add to new account
+                                if ($request->account_id) {
+                                    $new_account = Account::find($request->account_id);
+                                    if ($new_account) {
+                                        $new_account->update([
+                                            'initial_balance' => $new_account->initial_balance + $pay_amount,
+                                        ]);
+                                    }
+                                }
+                            } else if ($existing_payment->montant != $pay_amount && $existing_payment->account_id) {
+                                // Adjust account balance if amount changed
+                                $account = Account::find($existing_payment->account_id);
+                                if ($account) {
+                                    $difference = $pay_amount - $existing_payment->montant;
+                                    $account->update([
+                                        'initial_balance' => $account->initial_balance + $difference,
+                                    ]);
+                                }
+                            }
+                        } else {
+                            // Create new payment
+                            $payment = new PaymentSale();
+                            $payment->sale_id = $id;
+                            $payment->Ref = 'PYT-' . date("Ymd") . '-' . (PaymentSale::count() + 1);
+                            $payment->date = $request->date;
+                            $payment->montant = $pay_amount;
+                            $payment->payment_method_id = $request->payment_method_id;
+                            $payment->account_id = $request->account_id;
+                            $payment->notes = $request->payment_notes ?? 'Payment during sale update';
+                            $payment->user_id = Auth::user()->id;
+                            $payment->save();
+                            
+                            // Update account balance
+                            if ($request->account_id) {
+                                $account = Account::find($request->account_id);
+                                if ($account) {
+                                    $account->update([
+                                        'initial_balance' => $account->initial_balance + $pay_amount,
+                                    ]);
+                                }
+                            }
+                        }
+                        
+                        // Update paid_amount in sale
+                        $current_Sale->paid_amount = $pay_amount;
+                    } elseif ($existing_payment && $pay_amount == 0) {
+                        // Remove payment if pay_amount is 0
+                        if ($existing_payment->account_id) {
+                            $account = Account::find($existing_payment->account_id);
+                            if ($account) {
+                                $account->update([
+                                    'initial_balance' => $account->initial_balance - $existing_payment->montant,
+                                ]);
+                            }
+                        }
+                        $existing_payment->delete();
+                        $current_Sale->paid_amount = 0;
+                    }
+
+                    // Calculate payment status
                     $due = $request['GrandTotal'] - $current_Sale->paid_amount;
-                    if ($due === 0.0 || $due < 0.0) {
+                    if ($due <= 0) {
                         $payment_statut = 'paid';
-                    } else if ($due != $request['GrandTotal']) {
+                    } elseif ($current_Sale->paid_amount > 0) {
                         $payment_statut = 'partial';
-                    } else if ($due == $request['GrandTotal']) {
+                    } else {
                         $payment_statut = 'unpaid';
                     }
 
-                
                     $current_Sale->update([
                         'date' => $request['date'],
                         'client_id' => $request['client_id'],
@@ -1061,6 +1202,7 @@ public function edit($id)
                         'shipping' => $request['shipping'],
                         'assigned_driver' => $request['assigned_driver'],
                         'GrandTotal' => $request['GrandTotal'],
+                        'paid_amount' => $current_Sale->paid_amount,
                         'payment_statut' => $payment_statut,
                     ]);
 
@@ -1070,7 +1212,6 @@ public function edit($id)
 
             }
             return abort('403', __('You are not authorized'));
-
         }
     }
 
