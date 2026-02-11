@@ -254,6 +254,79 @@
           </div>
         </div>
 
+        <!-- ============== PAYMENT SECTION ============== -->
+        <div class="card mt-5">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">{{ __('Payment Information') }}</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+
+              <!-- Pay Amount -->
+              <div class="form-group col-md-6">
+                <validation-provider name="Pay Amount" :rules="{ regex: /^\d*\.?\d*$/}" v-slot="validationContext">
+                  <label for="pay_amount">{{ __('translate.Pay_Amount') }}</label>
+                  <div class="input-group">
+                    <input :state="getValidationState(validationContext)" aria-describedby="pay_amount-feedback"
+                      v-model.number="sale.pay_amount" @keyup="keyup_PayAmount()" type="text" class="form-control">
+                    <span class="input-group-text">{{$currency}}</span>
+                  </div>
+                  <span class="error">@{{ validationContext.errors[0] }}</span>
+                  <small class="form-text text-muted">
+                    {{ __('translate.Enter_amount_paid_now_leave_0_for_unpaid') }}
+                  </small>
+                </validation-provider>
+              </div>
+
+              <!-- Payment Method -->
+              <div class="form-group col-md-6">
+                <validation-provider name="Payment Method" v-slot="{ valid, errors }">
+                  <label>{{ __('translate.Payment_Method') }}</label>
+                  <v-select 
+                    placeholder="{{ __('translate.Choose_Payment_Method') }}" 
+                    v-model="sale.payment_method_id"
+                    :reduce="(option) => option.value"
+                    :options="payment_methods.map(method => ({label: method.title, value: method.id}))">
+                  </v-select>
+                  <span class="error">@{{ errors[0] }}</span>
+                </validation-provider>
+              </div>
+
+              <!-- Account -->
+              <div class="form-group col-md-6">
+                <label>{{ __('translate.Account') }}</label>
+                <v-select 
+                  placeholder="{{ __('translate.Choose_Account') }}" 
+                  v-model="sale.account_id"
+                  :reduce="(option) => option.value"
+                  :options="accounts.map(account => ({label: account.account_name, value: account.id}))">
+                </v-select>
+              </div>
+
+              <!-- Payment Notes -->
+              <div class="form-group col-md-6">
+                <label for="payment_notes">{{ __('translate.Payment_Notes') }}</label>
+                <textarea type="text" v-model="sale.payment_notes" class="form-control" name="payment_notes" id="payment_notes"
+                  placeholder="{{ __('translate.Payment_Notes') }}"></textarea>
+              </div>
+
+              <!-- Payment Status Display -->
+              <div class="form-group col-md-12 mt-3">
+                <div class="alert" :class="paymentStatusClass">
+                  <strong>{{ __('translate.Payment_Status') }}:</strong> @{{ paymentStatusText }}
+                  <span v-if="sale.pay_amount > 0">
+                    <br>{{ __('translate.Paid') }}: {{$currency}} @{{ formatNumber(sale.pay_amount, 2) }}
+                    <span v-if="sale.pay_amount < GrandTotal">
+                      | {{ __('translate.Due') }}: {{$currency}} @{{ formatNumber(GrandTotal - sale.pay_amount, 2) }}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <!-- ============== END PAYMENT SECTION ============== -->
 
         <div class="row mt-3">
           <div class="col-lg-6">
@@ -416,11 +489,19 @@
           warehouses: @json($warehouses),
           clients: @json($clients),
           users: @json($users),
+          payment_methods: @json($payment_methods),
+          accounts: @json($accounts),
           products: @json($products),
           details: @json($details),
           detail: {},
           sales: [],
-          sale:  @json($sale),
+          sale: {
+            ...@json($sale),
+            pay_amount: {{ $sale['pay_amount'] ?? 0 }},
+            payment_method_id: "{{ $sale['payment_method_id'] ?? '' }}",
+            account_id: "{{ $sale['account_id'] ?? '' }}",
+            payment_notes: "",
+          },
           total: 0,
           GrandTotal: @json($sale['GrandTotal']),
           grand_total_copy: @json($sale['GrandTotal']),
@@ -454,7 +535,26 @@
           }
         },
 
-       
+        computed: {
+          paymentStatusText() {
+            if (this.sale.pay_amount <= 0) {
+              return '{{ __('translate.Unpaid') }}';
+            } else if (this.sale.pay_amount >= this.GrandTotal) {
+              return '{{ __('translate.Paid') }}';
+            } else {
+              return '{{ __('translate.Partial') }}';
+            }
+          },
+          paymentStatusClass() {
+            if (this.sale.pay_amount <= 0) {
+              return 'alert-warning';
+            } else if (this.sale.pay_amount >= this.GrandTotal) {
+              return 'alert-success';
+            } else {
+              return 'alert-info';
+            }
+          }
+        },
        
     methods: {
 
@@ -478,6 +578,10 @@
         this.$refs.edit_sale.validate().then(success => {
           if (!success) {
             toastr.error('{{ __('translate.Please_fill_the_form_correctly') }}');
+          } else if (this.sale.pay_amount < 0) {
+            toastr.error('{{ __('translate.Pay_amount_cannot_be_negative') }}');
+          } else if (this.sale.pay_amount > this.GrandTotal) {
+            toastr.error('{{ __('translate.Pay_amount_cannot_exceed_total') }}');
           } else {
             this.Update_Sale();
           }
@@ -654,10 +758,7 @@
     Selected_Customer(value){
       if (value === null) {
         this.sale.client_id = "";
-       
       }
-   
-
     },
 
   
@@ -779,6 +880,17 @@
       this.Calcul_Total();
     },
 
+    //---------- keyup PayAmount
+    keyup_PayAmount() {
+      if (isNaN(this.sale.pay_amount)) {
+        this.sale.pay_amount = 0;
+      } else if (this.sale.pay_amount == '') {
+        this.sale.pay_amount = 0;
+      } else if (this.sale.pay_amount > this.GrandTotal) {
+        toastr.warning('{{ __('translate.Pay_amount_cannot_exceed_total') }}');
+        this.sale.pay_amount = this.GrandTotal;
+      }
+    },
 
     //---------- keyup OrderTax
     keyup_OrderTax() {
@@ -864,8 +976,6 @@
           var grand_total =  this.GrandTotal.toFixed(2);
           this.GrandTotal = parseFloat(grand_total);
       }
-      
-     
   },
 
     //-----------------------------------Delete Detail Product ------------------------------\\
@@ -932,7 +1042,11 @@
             discount_percent_total: this.sale.discount_percent_total?this.sale.discount_percent_total:0,
             shipping: this.sale.shipping?this.sale.shipping:0,
             details: this.details,
-            assigned_driver: this.sale.assigned_driver
+            assigned_driver: this.sale.assigned_driver,
+            pay_amount: this.sale.pay_amount ? this.sale.pay_amount : 0,
+            payment_method_id: this.sale.payment_method_id,
+            account_id: this.sale.account_id,
+            payment_notes: this.sale.payment_notes
           })
           .then(response => {
              // Complete the animation of theprogress bar.
