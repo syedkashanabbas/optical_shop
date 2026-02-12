@@ -39,7 +39,7 @@
                 </validation-provider>
               </div>
 
-              <!-- Customer -->
+              <!-- Customer with Balance -->
               <div class="form-group col-md-4">
                 <validation-provider name="Customer" rules="required" v-slot="{ valid, errors }">
                   <label>{{ __('translate.Customer') }} <span class="field_required">*</span></label>
@@ -50,6 +50,18 @@
                       value: clients.id
                     }))"></v-select>
                   <span class="error">@{{ errors[0] }}</span>
+                  
+                  <!-- Customer Balance Display -->
+                  <div v-if="sale.client_id && customer_balance > 0" class="mt-2 p-2 bg-light border rounded">
+                    <span class="text-danger font-weight-bold">
+                      <i class="i-Money-Bag"></i> {{ __('Previous Balance') }}: {{$currency}} @{{ formatNumber(customer_balance, 2) }}
+                    </span>
+                  </div>
+                  <div v-else-if="sale.client_id && customer_balance < 0" class="mt-2 p-2 bg-light border rounded">
+                    <span class="text-success font-weight-bold">
+                      <i class="i-Money-Bag"></i> {{ __('Customer Credit') }}: {{$currency}} @{{ formatNumber(Math.abs(customer_balance), 2) }}
+                    </span>
+                  </div>
                 </validation-provider>
               </div>
 
@@ -171,12 +183,27 @@
                       <td class="bold">{{ __('translate.Shipping') }}</td>
                       <td>{{$currency}} @{{sale.shipping.toFixed(2)}}</td>
                     </tr>
+                    
+                    <!-- Previous Balance Row -->
+                    <tr v-if="customer_balance !== 0">
+                      <td class="bold" :class="{'text-danger': customer_balance > 0, 'text-success': customer_balance < 0}">
+                        <span v-if="customer_balance > 0">{{ __('Previous Due') }}</span>
+                        <span v-else>{{ __('Previous Credit') }}</span>
+                      </td>
+                      <td :class="{'text-danger': customer_balance > 0, 'text-success': customer_balance < 0}">
+                        {{$currency}} @{{formatNumber(Math.abs(customer_balance), 2)}}
+                      </td>
+                    </tr>
+                    
+                    <!-- Grand Total with Balance -->
                     <tr>
                       <td>
                         <span class="font-weight-bold">{{ __('translate.Total') }}</span>
                       </td>
                       <td>
-                        <span class="font-weight-bold">{{$currency}} @{{GrandTotal.toFixed(2)}}</span>
+                        <span class="font-weight-bold" :class="{'text-danger': customer_balance > 0}">
+                          {{$currency}} @{{GrandTotalWithBalance.toFixed(2)}}
+                        </span>
                       </td>
                     </tr>
                   </tbody>
@@ -303,8 +330,8 @@
                   <strong>{{ __('translate.Payment_Status') }}:</strong> @{{ paymentStatusText }}
                   <span v-if="sale.pay_amount > 0">
                     <br>{{ __('translate.Paid') }}: {{$currency}} @{{ formatNumber(sale.pay_amount, 2) }}
-                    <span v-if="sale.pay_amount < GrandTotal">
-                      | {{ __('translate.Due') }}: {{$currency}} @{{ formatNumber(GrandTotal - sale.pay_amount, 2) }}
+                    <span v-if="sale.pay_amount < GrandTotalWithBalance">
+                      | {{ __('translate.Due') }}: {{$currency}} @{{ formatNumber(GrandTotalWithBalance - sale.pay_amount, 2) }}
                     </span>
                   </span>
                 </div>
@@ -542,23 +569,31 @@
         qty_min: "",
         is_imei: "",
         imei_number: "",
-      }
+      },
+      // Customer balance
+      customer_balance: 0
     },
 
     computed: {
+      // GrandTotal with customer balance
+      GrandTotalWithBalance() {
+        return this.GrandTotal + this.customer_balance;
+      },
+      
       paymentStatusText() {
         if (this.sale.pay_amount <= 0) {
           return '{{ __('translate.Unpaid') }}';
-        } else if (this.sale.pay_amount >= this.GrandTotal) {
+        } else if (this.sale.pay_amount >= this.GrandTotalWithBalance) {
           return '{{ __('translate.Paid') }}';
         } else {
           return '{{ __('translate.Partial') }}';
         }
       },
+      
       paymentStatusClass() {
         if (this.sale.pay_amount <= 0) {
           return 'alert-warning';
-        } else if (this.sale.pay_amount >= this.GrandTotal) {
+        } else if (this.sale.pay_amount >= this.GrandTotalWithBalance) {
           return 'alert-success';
         } else {
           return 'alert-info';
@@ -595,7 +630,7 @@
             toastr.error('{{ __('translate.Please_fill_the_form_correctly') }}');
           } else if (this.sale.pay_amount < 0) {
             toastr.error('{{ __('translate.Pay_amount_cannot_be_negative') }}');
-          } else if (this.sale.pay_amount > this.GrandTotal) {
+          } else if (this.sale.pay_amount > this.GrandTotalWithBalance) {
             toastr.error('{{ __('translate.Pay_amount_cannot_exceed_total') }}');
           } else {
             this.Create_Sale();
@@ -800,15 +835,34 @@
         this.Get_Products_By_Warehouse(value);
       },
 
+      //---------------------- Event Select Customer ------------------------------\\
       Selected_Customer(value) {
         if (value === null) {
           this.sale.client_id = "";
+          this.customer_balance = 0;
+        } else {
+          this.getCustomerBalance(value);
         }
+      },
+
+      //---------------------- Get Customer Balance ------------------------------\\
+      getCustomerBalance(customerId) {
+        axios.get(`/get_client_debt_total/${customerId}`)
+          .then(response => {
+            this.customer_balance = parseFloat(response.data.sell_due) || 0;
+            
+            if (this.customer_balance > 0) {
+              toastr.warning(`Previous Balance: {{$currency}} ${this.formatNumber(this.customer_balance, 2)}`);
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            this.customer_balance = 0;
+          });
       },
 
       //------------------------------------ Get Products By Warehouse -------------------------\\
       Get_Products_By_Warehouse(id) {
-        // Start the progress bar.
         NProgress.start();
         NProgress.set(0.1);
         axios
@@ -1020,16 +1074,15 @@
           this.sale.pay_amount = 0;
         } else if (this.sale.pay_amount == '') {
           this.sale.pay_amount = 0;
-        } else if (this.sale.pay_amount > this.GrandTotal) {
+        } else if (this.sale.pay_amount > this.GrandTotalWithBalance) {
           toastr.warning('{{ __('translate.Pay_amount_cannot_exceed_total') }}');
-          this.sale.pay_amount = this.GrandTotal;
+          this.sale.pay_amount = this.GrandTotalWithBalance;
         }
       },
 
       //--------------------------------- Create Sale -------------------------\\
       Create_Sale() {
         if (this.verifiedForm()) {
-          // Start the progress bar.
           NProgress.start();
           NProgress.set(0.1);
 
@@ -1047,7 +1100,8 @@
               discount_type: this.sale.discount_type,
               discount_percent_total: this.sale.discount_percent_total ? this.sale.discount_percent_total : 0,
               shipping: this.sale.shipping ? this.sale.shipping : 0,
-              GrandTotal: this.GrandTotal,
+              GrandTotal: this.GrandTotalWithBalance,
+              previous_balance: this.customer_balance,
               pay_amount: this.sale.pay_amount ? this.sale.pay_amount : 0,
               payment_method_id: this.sale.payment_method_id,
               account_id: this.sale.account_id,
